@@ -2,7 +2,6 @@
 This program will ask a user for a number. than check if the number is EVEN or ODD.
 The number should be between 1-100.
 """
-
 # ask for the number 
 
 number = int(input(f"please enter a number between 1-100.\n"))
