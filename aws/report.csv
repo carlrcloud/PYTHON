@@ -1,0 +1,4 @@
+instance_name,instance_id,image_id,instance_type,state
+carlos,i-06f519466425f64e1,ami-0230bd60aa48260c6,t2.micro,stopped
+ldap-test,i-0ddf5e215d3744a5a,ami-0a3c3a20c09d6f377,t2.micro,stopped
+promtheus-server-01,i-06ccecf8c133824f0,ami-0d7a109bf30624c99,t2.micro,stopped
