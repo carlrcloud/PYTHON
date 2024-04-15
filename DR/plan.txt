@@ -69,3 +69,18 @@ Involve legal and compliance teams in the DR planning process
 
 11. Appendix
 - Include additional resources, templates, and references
+
+
+The pilot light approach and the warm standby approach are two disaster recovery strategies that involve having a standby environment ready to take over in case of a disaster. While both approaches aim to minimize downtime and recovery time, they differ in how they prepare and maintain the standby environment.
+
+In the pilot light approach:
+
+Initial Setup: Organizations set up a minimal version of their production environment in a standby AWS Region. This minimal setup typically includes essential components needed to run critical applications or services.
+Activation Process: In the event of a disaster, organizations need to "turn on" the standby environment by deploying additional infrastructure and scaling up resources. This may involve provisioning additional servers, databases, and other necessary components to fully restore the production environment.
+Resource Consumption: Since the standby environment starts with minimal resources, organizations have lower ongoing costs. However, they need to scale up and deploy additional infrastructure during a disaster, which may lead to increased resource consumption and higher costs temporarily.
+In contrast, the warm standby approach:
+
+Initial Setup: Organizations maintain a fully functional replica of their production environment in another AWS Region. This replica includes all necessary infrastructure, servers, databases, and other components required to run the workload.
+Activation Process: In the event of a disaster, organizations only need to scale up the existing standby environment to handle increased workload demand. Since everything is already deployed and running in the standby environment, there is no need to deploy additional infrastructure or components.
+Resource Consumption: The warm standby approach typically incurs higher ongoing costs compared to the pilot light approach since resources are constantly running in the standby environment. However, organizations benefit from faster recovery times as there is no need to deploy additional infrastructure during a disaster.
+In summary, while both the pilot light and warm standby approaches offer effective disaster recovery solutions, they differ in their initial setup, activation process, and ongoing resource consumption. The pilot light approach starts with minimal resources and requires scaling up during a disaster, while the warm standby approach maintains a fully functional standby environment ready for immediate activation.
