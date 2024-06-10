@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  # Create the SNS topic
+  SNSTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: my-sns-topic
+  
+  # Create the SQS queue
+  SQSQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: my-sqs-queue
+  
+  # Create a Lambda function to configure the S3 bucket notification
+  ConfigureBucketLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              bucket_name = event['ResourceProperties']['BucketName']
+              sns_topic_arn = event['ResourceProperties']['SnsTopicArn']
+              sqs_queue_arn = event['ResourceProperties']['SqsQueueArn']
+
+              notification_configuration = {
+                  'TopicConfigurations': [
+                      {
+                          'Events': ['s3:ObjectCreated:Put'],
+                          'TopicArn': sns_topic_arn
+                      }
+                  ],
+                  'QueueConfigurations': [
+                      {
+                          'Events': ['s3:ObjectCreated:Put'],
+                          'QueueArn': sqs_queue_arn
+                      }
+                  ]
+              }
+
+              s3.put_bucket_notification_configuration(
+                  Bucket=bucket_name,
+                  NotificationConfiguration=notification_configuration
+              )
+
+              return {
+                  'Status': 'SUCCESS',
+                  'BucketName': bucket_name
+              }
+
+      Runtime: python3.8
+      Timeout: 300
+
+  # IAM Role for the Lambda function
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3BucketNotificationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutBucketNotificationConfiguration'
+                Resource: '*'
+
+  # Custom resource to trigger the Lambda function
+  ConfigureBucketNotification:
+    Type: 'Custom::ConfigureBucketNotification'
+    Properties:
+      ServiceToken: !GetAtt ConfigureBucketLambda.Arn
+      BucketName: existing-s3-bucket-name
+      SnsTopicArn: !Ref SNSTopic
+      SqsQueueArn: !GetAtt SQSQueue.Arn
+
+Outputs:
+  SNSTopicArn:
+    Value: !Ref SNSTopic
+    Description: 'The ARN of the SNS topic'
+  SQSQueueUrl:
+    Value: !Ref SQSQueue
+    Description: 'The URL of the SQS queue'
+  SQSQueueArn:
+    Value: !GetAtt SQSQueue.Arn
+    Description: 'The ARN of the SQS queue'
