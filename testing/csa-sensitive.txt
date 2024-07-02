@@ -1,0 +1,119 @@
+Check the File System Type:
+Confirm that your macOS file system is case-insensitive (default for most macOS installations). If it's case-sensitive, the issue might be caused by something else.
+
+You can check the file system type by running:
+
+bash
+Copy code
+diskutil info / | grep 'File System Personality'
+Look for "Case-sensitive" in the output.
+
+Force a Fresh Clone:
+Ensure you are performing a completely fresh clone by removing any cached configurations or remnants:
+
+bash
+Copy code
+rm -rf <repo-folder>
+git clone <repository-url> <repo-folder>
+cd <repo-folder>
+Set core.ignorecase to false:
+Before performing any operations in the newly cloned repository, set the core.ignorecase configuration to false:
+
+bash
+Copy code
+git config core.ignorecase false
+Check for Colliding Files:
+Identify the colliding files by running:
+
+bash
+Copy code
+git ls-tree -r HEAD | awk '{print $4}' | sort | uniq -d
+This command lists files that only differ by case.
+
+Resolve Collisions Manually:
+If collisions are found, rename the files manually to ensure they have unique names. For example:
+
+bash
+Copy code
+git mv conflictingfile1 conflictingfile1_temp
+git mv conflictingfile2 conflictingfile2_corrected
+git mv conflictingfile1_temp conflictingfile1_corrected
+Commit the Changes:
+After renaming the files, commit the changes:
+
+bash
+Copy code
+git add .
+git commit -m "Resolved case-sensitive path collisions"
+Check the Status:
+Verify that the issue has been resolved:
+
+bash
+Copy code
+git status
+Pull Latest Changes Carefully:
+If you're pulling changes from a remote repository, ensure you handle any potential collisions:
+
+bash
+Copy code
+git fetch
+git pull
+
+
+--------------------
+
+The output indicates that your file system is APFS, which by default is case-insensitive on macOS. Here are the steps to resolve the case-sensitive path collisions in your Git repository:
+
+Check for Case-Sensitive Files in the Repository:
+Identify files that differ only by case in the repository. Use the following command to list such files:
+
+bash
+Copy code
+git ls-tree -r HEAD | awk '{print $4}' | sort | uniq -di
+This command lists all files tracked by Git, sorts them, and shows duplicates (which indicate case differences).
+
+Resolve File Name Collisions:
+If you find files that differ only by case, you will need to rename them so that their names are unique. Here's an example of how you can rename the files:
+
+bash
+Copy code
+git mv filename1 filename1_temp
+git mv filename2 filename2_corrected
+git mv filename1_temp filename1_corrected
+Replace filename1, filename1_temp, and filename2_corrected with the actual file names involved in the collision.
+
+Commit the Changes:
+After renaming the files, stage the changes and commit them:
+
+bash
+Copy code
+git add .
+git commit -m "Resolved case-sensitive path collisions"
+Ensure Git Respects Case Sensitivity:
+Set the core.ignorecase configuration to false to ensure Git respects case sensitivity in the future:
+
+bash
+Copy code
+git config core.ignorecase false
+Re-clone the Repository (If Necessary):
+If you continue to experience issues, you might want to re-clone the repository again after performing the above steps:
+
+bash
+Copy code
+rm -rf <repo-folder>
+git clone <repository-url> <repo-folder>
+cd <repo-folder>
+Verify Configuration:
+Check the current value of core.ignorecase to confirm it’s set correctly:
+
+bash
+Copy code
+git config --get core.ignorecase
+This should output false.
+
+Check Repository Status:
+Verify that the issue has been resolved:
+
+bash
+Copy code
+git status
