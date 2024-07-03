@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'LambdaQuickSightPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'quicksight:CreateAccountSubscription'
+                  - 'quicksight:DescribeAccountSubscription'
+                  - 'quicksight:ListUsers'
+                  - 'quicksight:RegisterUser'
+                  - 'quicksight:DeleteUser'
+                  - 'iam:PassRole'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:*'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  QuickSightLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: 'index.lambda_handler'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import logging
+          import cfnresponse
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          quicksight = boto3.client('quicksight', region_name='us-east-1')  # Specify your region
+
+          def lambda_handler(event, context):
+              logger.info('Received event: %s', json.dumps(event))
+              try:
+                  request_type = event['RequestType']
+                  if request_type == 'Create':
+                      aws_account_id = event['ResourceProperties']['AwsAccountId']
+                      email_address = event['ResourceProperties']['EmailAddress']
+
+                      # Sign up for QuickSight
+                      response = quicksight.create_account_subscription(
+                          AwsAccountId=aws_account_id,
+                          AccountName='carlcloudquicksightaccount',  # Replace with your desired account name
+                          Edition='STANDARD',  # Change to 'STANDARD' if needed
+                          NotificationEmail=email_address,
+                          AuthenticationMethod='IAM_AND_QUICKSIGHT'  # Can be 'IAM_AND_QUICKSIGHT' or 'ACTIVE_DIRECTORY'
+                      )
+                      logger.info('QuickSight subscription successful: %s', response)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  elif request_type == 'Update':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  elif request_type == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  logger.error('Error processing %s request: %s', event['RequestType'], str(e))
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('QuickSight subscription setup completed.')
+              }
+
+      Runtime: 'python3.9'
+      Timeout: 60
+
+  InvokeQuickSightSignup:
+    Type: 'Custom::InvokeLambda'
+    Properties:
+      ServiceToken: !GetAtt QuickSightLambdaFunction.Arn
+      AwsAccountId: !Ref 'AWS::AccountId'
+      EmailAddress: 'yontacarlos1958@gmail.com'  # Replace with the actual email address for notifications
