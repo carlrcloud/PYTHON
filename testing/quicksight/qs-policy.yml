@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template to create an IAM policy for QuickSight users with access to Athena and S3.
+
+Resources:
+  QuickSightIAMPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: 'QuickSightPolicy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # QuickSight Namespace, Groups, Users, Dashboards, DataSources
+          - Effect: Allow
+            Action:
+              - quicksight:List*
+              - quicksight:Get*
+              - quicksight:Describe*
+              - quicksight:CreateGroupMembership
+              - quicksight:CreateGroup
+              - quicksight:CreateNamespace
+              - quicksight:CreateUser
+              - quicksight:CreateDashboard
+              - quicksight:UpdateDashboard
+              - quicksight:DeleteDashboard
+              - quicksight:UpdateDashboardPermissions
+              - quicksight:CreateDataSource
+              - quicksight:UpdateDataSource
+              - quicksight:DeleteDataSource
+            Resource:
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:namespace/${NamespaceName}'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:group/${NamespaceName}/*'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:user/${NamespaceName}/*'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dashboard/*'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:datasource/*'
+
+          # Athena
+          - Effect: Allow
+            Action:
+              - athena:StartQueryExecution
+              - athena:GetQueryExecution
+              - athena:GetQueryResults
+              - athena:BatchGetQueryExecution
+              - athena:ListDataCatalogs
+              - athena:ListDatabases
+              - athena:ListTableMetadata
+              - athena:ListTagsForResource
+              - athena:GetDatabase
+              - athena:GetTableMetadata
+            Resource:
+              - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:workgroup/primary'
+              - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:datacatalog/*'
+              - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:database/*'
+              - !Sub 'arn:aws:athena:${AWS::Region}:${AWS::AccountId}:table/*'
+
+          # S3
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource:
+              - !Sub 'arn:aws:s3:::${S3BucketName}'
+              - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+
+          # Deny public dashboard sharing
+          - Effect: Deny
+            Action:
+              - quicksight:UpdateDashboardPermissions
+              - quicksight:CreateGroup
+              - quicksight:UpdateGroup
+              - quicksight:DeleteGroup
+              - quicksight:CreateGroupMembership
+              - quicksight:DeleteGroupMembership
+            Resource:
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:namespace/default'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:group/default/*'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:user/default/*'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dashboard/*'
+              - !Sub 'arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:datasource/*'
+            Condition:
+              StringEquals:
+                quicksight:DashboardVisibility: 'PUBLIC'
+      Roles:
+        - !Ref QuickSightRole  # Replace with your IAM Role
+
+Parameters:
+  NamespaceName:
+    Type: String
+    Description: 'The namespace name for QuickSight'
+  S3BucketName:
+    Type: String
+    Description: 'The S3 bucket name for Athena query results'
+
+Outputs:
+  QuickSightPolicyArn:
+    Description: 'ARN of the QuickSight IAM Policy'
+    Value: !GetAtt QuickSightIAMPolicy.Arn
