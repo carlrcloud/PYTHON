@@ -21,22 +21,17 @@ def lambda_handler(event, context):
         policy_arn = event['ResourceProperties']['PolicyArn']
 
         if request_type == 'Create':
-            def namespace_exists():
+            def describe_namespace():
                 try:
                     response = quicksight.describe_namespace(
                         AwsAccountId=aws_account_id,
                         Namespace=namespace
                     )
                     logger.info('Describe namespace response: %s', response)
-                    if 'CreationStatus' in response:
-                        status = response['CreationStatus']
-                        logger.info('Namespace creation status: %s', status)
-                        if status == 'CREATED':
-                            return True
-                    return False
+                    return response
                 except quicksight.exceptions.ResourceNotFoundException as e:
                     logger.warning('Namespace not found: %s', e)
-                    return False
+                    return None
                 except Exception as e:
                     logger.error('An error occurred: %s', e)
                     cfnresponse.send(event, context, cfnresponse.FAILED, response_data, "CustomResourcePhysicalID")
@@ -61,8 +56,12 @@ def lambda_handler(event, context):
 
             def wait_for_namespace_creation(max_retries=20, delay=30):
                 for _ in range(max_retries):
-                    if namespace_exists():
-                        return True
+                    namespace_info = describe_namespace()
+                    if namespace_info and 'CreationStatus' in namespace_info:
+                        status = namespace_info['CreationStatus']
+                        logger.info('Namespace creation status: %s', status)
+                        if status == 'CREATED':
+                            return True
                     time.sleep(delay)
                 return False
 
@@ -133,8 +132,9 @@ def lambda_handler(event, context):
                     cfnresponse.send(event, context, cfnresponse.FAILED, response_data, "CustomResourcePhysicalID")
                     raise e
 
-            # Create Namespace if it does not exist
-            if not namespace_exists():
+            # Check if the namespace already exists
+            namespace_info = describe_namespace()
+            if not namespace_info:
                 create_namespace()
 
             # Wait for Namespace to be created
