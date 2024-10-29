@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  LoadBalancerType:
+    Type: String
+    Default: application
+    AllowedValues: [application, network]
+    Description: "Type of load balancer (application or network)."
+
+  NumberOfTargets:
+    Type: Number
+    Default: 1
+    AllowedValues: [1, 2, 3]
+    Description: "Number of targets (1 to 3) to include in the Target Group."
+
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: "The VPC ID where the target group should be created."
+
+  Protocol:
+    Type: String
+    Default: HTTP
+    AllowedValues: [HTTP, HTTPS, TCP, UDP]
+    Description: "The protocol to use for the target group (HTTP, HTTPS for ALB; TCP, UDP for NLB)."
+
+  Port:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 65535
+    Description: "The port on which the targets receive traffic."
+
+  HealthCheckProtocol:
+    Type: String
+    Default: HTTP
+    AllowedValues: [HTTP, HTTPS, TCP, UDP]
+    Description: "The protocol to use for health checks (for NLB use TCP or UDP)."
+
+  HealthCheckPath:
+    Type: String
+    Default: /
+    Description: "The destination path for health checks on the targets (only applicable to ALB)."
+
+  HealthCheckPort:
+    Type: String
+    Default: traffic-port
+    Description: "The port to use for health checks. Default is 'traffic-port', which uses the same port as the target group."
+
+  TargetType:
+    Type: String
+    Default: instance
+    AllowedValues: [instance, ip]
+    Description: "The type of target to register with the target group (instance or ip)."
+
+  DeregistrationDelay:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 3600
+    Description: "The amount of time for Elastic Load Balancing to wait before changing the state of a deregistered target to unused (only applicable to ALB)."
+
+  HealthCheckIntervalSeconds:
+    Type: Number
+    Default: 30
+    MinValue: 5
+    MaxValue: 300
+    Description: "The approximate amount of time, in seconds, between health checks of an individual target."
+
+  HealthCheckTimeoutSeconds:
+    Type: Number
+    Default: 5
+    MinValue: 2
+    MaxValue: 120
+    Description: "The amount of time, in seconds, during which no response means a failed health check."
+
+  HealthyThresholdCount:
+    Type: Number
+    Default: 3
+    MinValue: 2
+    MaxValue: 10
+    Description: "The number of consecutive health checks successes required before considering an unhealthy target healthy."
+
+  UnhealthyThresholdCount:
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 10
+    Description: "The number of consecutive health check failures required before considering a target unhealthy."
+
+  Target1InstanceId:
+    Type: String
+    Description: "Instance ID for Target 1."
+  
+  Target1Port:
+    Type: Number
+    Default: 80
+    Description: "Port number for Target 1."
+
+  Target2InstanceId:
+    Type: String
+    Default: ""
+    Description: "Instance ID for Target 2 (optional)."
+
+  Target2Port:
+    Type: Number
+    Default: 80
+    Description: "Port number for Target 2 (optional)."
+
+  Target3InstanceId:
+    Type: String
+    Default: ""
+    Description: "Instance ID for Target 3 (optional)."
+
+  Target3Port:
+    Type: Number
+    Default: 80
+    Description: "Port number for Target 3 (optional)."
+
+Conditions:
+  IsALB: !Equals [!Ref LoadBalancerType, application]
+  IncludeTarget2: !Equals [!Ref NumberOfTargets, 2]
+  IncludeTarget3: !Equals [!Ref NumberOfTargets, 3]
+
+Resources:
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: !Sub "${AWS::StackName}-tg"
+      VpcId: !Ref VPCId
+      Protocol: !Ref Protocol
+      Port: !Ref Port
+      HealthCheckProtocol: !Ref HealthCheckProtocol
+      TargetType: !Ref TargetType
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
+      HealthCheckTimeoutSeconds: !Ref HealthCheckTimeoutSeconds
+      HealthyThresholdCount: !Ref HealthyThresholdCount
+      UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+      HealthCheckPath: !If [IsALB, !Ref HealthCheckPath, !Ref "AWS::NoValue"]
+      HealthCheckPort: !If [IsALB, !Ref HealthCheckPort, !Ref "AWS::NoValue"]
+      DeregistrationDelayTimeoutSeconds: !If [IsALB, !Ref DeregistrationDelay, !Ref "AWS::NoValue"]
+      Targets:
+        - Id: !Ref Target1InstanceId
+          Port: !Ref Target1Port
+        - !If 
+          - IncludeTarget2
+          - 
+            Id: !Ref Target2InstanceId
+            Port: !Ref Target2Port
+          - !Ref "AWS::NoValue"
+        - !If 
+          - IncludeTarget3
+          - 
+            Id: !Ref Target3InstanceId
+            Port: !Ref Target3Port
+          - !Ref "AWS::NoValue"
+
+Outputs:
+  TargetGroupArn:
+    Description: "The ARN of the created Target Group"
+    Value: !Ref MyTargetGroup
