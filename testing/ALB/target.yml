@@ -7,11 +7,17 @@ Parameters:
     AllowedValues: [application, network]
     Description: "Type of load balancer (application or network)."
 
-  NumberOfTargets:
-    Type: Number
-    Default: 1
-    AllowedValues: [1, 2, 3]
-    Description: "Number of targets (1 to 3) to include in the Target Group."
+  AddTarget2:
+    Type: String
+    Default: "No"
+    AllowedValues: ["Yes", "No"]
+    Description: "Specify whether to add a second target (Yes or No)."
+
+  AddTarget3:
+    Type: String
+    Default: "No"
+    AllowedValues: ["Yes", "No"]
+    Description: "Specify whether to add a third target (Yes or No)."
 
   VPCId:
     Type: AWS::EC2::VPC::Id
@@ -117,9 +123,9 @@ Parameters:
     Description: "Port number for Target 3 (optional)."
 
 Conditions:
-  IsALB: !Equals [!Ref LoadBalancerType, application]
-  IncludeTarget2: !Equals [!Ref NumberOfTargets, 2]
-  IncludeTarget3: !Equals [!Ref NumberOfTargets, 3]
+  IncludeTarget2: !Equals [!Ref AddTarget2, "Yes"]
+  IncludeTarget3: !Equals [!Ref AddTarget3, "Yes"]
+  AtLeastOneTargetProvided: !Not [!Equals [!Ref Target1InstanceId, ""]]
 
 Resources:
   MyTargetGroup:
@@ -141,19 +147,18 @@ Resources:
       Targets:
         - Id: !Ref Target1InstanceId
           Port: !Ref Target1Port
-        - !If 
+        - !If
           - IncludeTarget2
           - 
             Id: !Ref Target2InstanceId
             Port: !Ref Target2Port
           - !Ref "AWS::NoValue"
-        - !If 
+        - !If
           - IncludeTarget3
           - 
             Id: !Ref Target3InstanceId
             Port: !Ref Target3Port
           - !Ref "AWS::NoValue"
-
 Outputs:
   TargetGroupArn:
     Description: "The ARN of the created Target Group"
