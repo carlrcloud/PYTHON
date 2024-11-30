@@ -1,0 +1,17 @@
+{
+    "UsersAndGroupsContent": {
+      "groups": [
+        {"name": "Sales", "description": "Sales group for QuickSight"},
+        {"name": "Operations", "description": "Operations group for QuickSight"},
+        {"name": "Management", "description": "Management group for QuickSight"}
+      ],
+      "users": [
+        {"username": "user1", "email": "user1@example.com", "group": "Sales"},
+        {"username": "user2", "email": "user2@example.com", "group": "Sales"},
+        {"username": "user3", "email": "user3@example.com", "group": "Operations"},
+        {"username": "user4", "email": "user4@example.com", "group": "Operations"},
+        {"username": "user5", "email": "user5@example.com", "group": "Management"}
+      ]
+    }
+  }
+  
