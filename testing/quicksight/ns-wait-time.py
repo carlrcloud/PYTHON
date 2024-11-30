@@ -149,3 +149,4 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error('Error processing request: %s', str(e))
         cfnresponse.send(event, context, cfnresponse.FAILED, response_data, "CustomResourcePhysicalID")
+
