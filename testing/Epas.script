@@ -1,0 +1,154 @@
+To install EPAS 15 on RHEL 9, follow these detailed steps tailored for the RHEL platform:
+
+1. Prerequisites
+	1.	Update the System:
+
+sudo yum update -y
+
+
+	2.	Install Required Packages:
+Ensure that the necessary dependencies are installed:
+
+sudo yum install -y gcc zlib-devel readline-devel libcurl openssl libxml2
+
+
+	3.	Check SELinux:
+	•	If SELinux is enabled, ensure it is configured correctly to allow EPAS to run.
+	4.	Open the Firewall Port:
+Ensure the default PostgreSQL port (5432) is open:
+
+sudo firewall-cmd --permanent --add-port=5432/tcp
+sudo firewall-cmd --reload
+
+2. Add the EDB Yum Repository
+	1.	Download and Install the EDB Repository:
+
+sudo rpm -ivh https://yum.enterprisedb.com/edbrepos/edb-repo-latest.noarch.rpm
+
+
+	2.	Enable the EDB Repository:
+
+sudo yum-config-manager --enable edb-repo
+
+3. Install EPAS 15
+	1.	Install the EPAS 15 Server:
+
+sudo yum install -y edb-as15-server
+
+
+	2.	Verify Installation:
+Confirm that EPAS 15 is installed:
+
+/usr/edb/as15/bin/psql --version
+
+Output should show:
+
+psql (PostgreSQL) 15.x (EnterpriseDB Advanced Server)
+
+4. Initialize the Database Cluster
+	1.	Run initdb to Initialize:
+
+sudo /usr/edb/as15/bin/initdb -D /var/lib/edb/as15/data
+
+
+	2.	Set Ownership of the Data Directory:
+
+sudo chown -R enterprisedb:enterprisedb /var/lib/edb/as15/data
+
+5. Start and Enable the EPAS Service
+	1.	Start the EPAS Service:
+
+sudo systemctl start edb-as-15
+
+
+	2.	Enable the Service at Boot:
+
+sudo systemctl enable edb-as-15
+
+
+	3.	Check Service Status:
+
+sudo systemctl status edb-as-15
+
+6. Configure EPAS 15
+	1.	Edit Configuration Files:
+Open the postgresql.conf and pg_hba.conf files:
+
+sudo nano /var/lib/edb/as15/data/postgresql.conf
+sudo nano /var/lib/edb/as15/data/pg_hba.conf
+
+Update the following:
+	•	In postgresql.conf:
+
+listen_addresses = '*'
+
+
+	•	In pg_hba.conf, add a line to allow external connections:
+
+host all all 0.0.0.0/0 md5
+
+
+	2.	Restart the EPAS Service:
+
+sudo systemctl restart edb-as-15
+
+7. Create a Database User
+	1.	Switch to the EPAS User:
+
+sudo -u enterprisedb /usr/edb/as15/bin/psql
+
+
+	2.	Set a Password for the Default User:
+
+ALTER USER enterprisedb WITH PASSWORD 'your_secure_password';
+\q
+
+8. Verify Installation
+	1.	Connect to EPAS:
+
+/usr/edb/as15/bin/psql -U enterprisedb -h localhost -d postgres
+
+
+	2.	Run a Test Query:
+
+SELECT version();
+
+Optional: Automate Installation Using a Script
+
+For multiple servers, use a shell script:
+
+#!/bin/bash
+
+# Update system
+yum update -y
+
+# Install dependencies
+yum install -y gcc zlib-devel readline-devel libcurl openssl libxml2
+
+# Add EDB repository
+rpm -ivh https://yum.enterprisedb.com/edbrepos/edb-repo-latest.noarch.rpm
+yum-config-manager --enable edb-repo
+
+# Install EPAS 15
+yum install -y edb-as15-server
+
+# Initialize the database cluster
+/usr/edb/as15/bin/initdb -D /var/lib/edb/as15/data
+chown -R enterprisedb:enterprisedb /var/lib/edb/as15/data
+
+# Enable and start EPAS service
+systemctl enable edb-as-15
+systemctl start edb-as-15
+
+# Open firewall port
+firewall-cmd --permanent --add-port=5432/tcp
+firewall-cmd --reload
+
+echo "EPAS 15 installation completed!"
+
+Save the script as install_epas15.sh, make it executable, and run:
+
+chmod +x install_epas15.sh
+sudo ./install_epas15.sh
+
+Final Notes
