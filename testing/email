@@ -1,0 +1,30 @@
+
+Subject: Notice: Upcoming Cleanup of Non-Compliant Security Groups
+
+Dear Tenants,
+
+We are reaching out to inform you about an upcoming cleanup of Security Groups (SGs) in our shared AWS environment. This cleanup will focus on:
+	1.	Security Groups that are properly tagged but are open to the world (0.0.0.0/0) and not attached to any EC2 instance.
+
+These Security Groups will be automatically deleted to ensure compliance with our security policies.
+
+Important Recommendations
+
+To avoid issues and improve management, we ask you to take the following actions:
+	1.	Tag Your Resources Properly
+	•	Ensure all your resources, including Security Groups, are tagged appropriately (e.g., with Owner, Team, Environment). Proper tagging helps us identify ownership and maintain better governance.
+	2.	Use the Service Catalog for Resource Creation
+	•	We recommend using the Service Catalog to create Security Groups and other resources. This ensures compliance with organizational policies and facilitates easier management.
+	3.	Verify and Update Your Security Groups
+	•	Review your existing Security Groups, especially those with rules allowing unrestricted access (0.0.0.0/0).
+	•	Correct any non-compliant rules by limiting access to trusted IP ranges or removing such rules where they are not necessary.
+
+Deadline for Action
+
+Please ensure your resources are tagged properly and your Security Groups are reviewed and updated by [Deadline Date]. After this date, any non-compliant Security Groups (tagged, open to the world, and unattached) will be automatically deleted.
+
+If you have any questions or need assistance with tagging or updating your Security Groups, please do not hesitate to contact us.
+
+Thank you for your cooperation and for helping us maintain a secure and compliant environment.
+
+Best regards,
