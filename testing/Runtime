@@ -1,0 +1,15 @@
+
+Subject: Action Required: Update Lambda Function Runtime in AWS Dev Account
+
+Dear [User’s Name],
+
+
+We wanted to bring to your attention that Python 3.8 has been deprecated and will no longer receive any updates or support from AWS. To ensure continued functionality and support for your Lambda functions, we highly recommend that you update the runtime to a supported version as soon as possible.
+
+We suggest upgrading to Python 3.11, as it offers the latest features and security enhancements.
+
+Please review any Lambda functions you may have created in the AWS Dev Account and update their runtimes to avoid disruptions or vulnerabilities. If you need any assistance with this process, feel free to reach out, and we’d be happy to help.
+
+Thank you for your prompt attention to this matter.
+
+Best regards,
