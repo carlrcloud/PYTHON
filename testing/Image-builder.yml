@@ -1,0 +1,44 @@
+name: InstallAndVerifySSMAgent
+description: Install and verify the signature of the Amazon SSM Agent on RHEL 8
+schemaVersion: 1.0
+components:
+  - name: InstallSSMAgent
+    description: Install and verify the Amazon SSM Agent on RHEL 8
+    version: 1.0.0
+    platform: Linux
+    phases:
+      - name: InstallSSMAgentPhase
+        steps:
+          - name: InstallSSMAgent
+            action: ExecuteBash
+            inputs:
+              commands:
+                # Import the GPG key for Amazon
+                - |
+                  echo "Importing Amazon GPG Key..."
+                  rpm --import https://amazon-ssm-agent.s3.amazonaws.com/amazon-ssm-agent.gpg
+                # Verify the GPG key has been added successfully
+                - |
+                  echo "Verifying GPG key installation..."
+                  rpm -qa gpg-pubkey* | grep "amazon"
+                # Download the Amazon SSM Agent package
+                - |
+                  echo "Downloading Amazon SSM Agent package..."
+                  curl -o /tmp/amazon-ssm-agent.rpm https://amazon-ssm-agent.s3.amazonaws.com/latest/linux_amd64/amazon-ssm-agent.rpm
+                # Verify the signature of the downloaded package
+                - |
+                  echo "Verifying the signature of the Amazon SSM Agent package..."
+                  rpm --checksig /tmp/amazon-ssm-agent.rpm
+                # Install the Amazon SSM Agent
+                - |
+                  echo "Installing Amazon SSM Agent..."
+                  yum install -y /tmp/amazon-ssm-agent.rpm
+                # Enable and start the Amazon SSM Agent service
+                - |
+                  echo "Enabling and starting Amazon SSM Agent service..."
+                  systemctl enable amazon-ssm-agent
+                  systemctl start amazon-ssm-agent
+                # Clean up
+                - |
+                  echo "Cleaning up temporary files..."
+                  rm -f /tmp/amazon-ssm-agent.rpm
