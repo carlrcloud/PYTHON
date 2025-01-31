@@ -1,0 +1,29 @@
+aws ec2 describe-images \
+  --owners 309956199498 \
+  --filters "Name=architecture,Values=x86_64" \
+            "Name=description,Values=RHEL9-8.10.0*" \
+  --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
+  --output text
+
+
+aws ec2 describe-images \
+  --owners 309956199498 \
+  --filters "Name=architecture,Values=arm64" \
+            "Name=description,Values=RHEL9-8.10.0*" \
+  --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
+  --output text
+
+
+aws ssm put-parameter \
+  --name "/custom/ami/rhel-latest-x86_64" \
+  --value "$(aws ec2 describe-images --owners 309956199498 \
+            --filters "Name=architecture,Values=x86_64" \
+            --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' --output text)" \
+  --type "String" --overwrite
+
+aws ssm put-parameter \
+  --name "/custom/ami/rhel-latest-arm64" \
+  --value "$(aws ec2 describe-images --owners 309956199498 \
+            --filters "Name=architecture,Values=arm64" \
+            --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' --output text)" \
+  --type "String" --overwrite
