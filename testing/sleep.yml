@@ -1,0 +1,84 @@
+name: ConfigureStorageVolume
+description: Set up LVM volumes, format with XFS, update fstab, and copy initial data
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: SetupLVMAndMountPoints
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euxo pipefail
+
+              pvname=$(ls /sys/block | tail -1)
+              sudo pvcreate /dev/$pvname
+              sudo vgcreate rootvg /dev/$pvname
+              sleep 2
+
+              sudo lvcreate -n tmp -L 5G rootvg && sudo mkfs.xfs /dev/rootvg/tmp
+              sleep 1
+              sudo lvcreate -n var -L 5G rootvg && sudo mkfs.xfs /dev/rootvg/var
+              sleep 1
+              sudo lvcreate -n log -L 10G rootvg && sudo mkfs.xfs /dev/rootvg/log
+              sleep 1
+              sudo lvcreate -n audit -L 1G rootvg && sudo mkfs.xfs /dev/rootvg/audit
+              sleep 1
+              sudo lvcreate -n home -L 5G rootvg && sudo mkfs.xfs /dev/rootvg/home
+              sleep 1
+              sudo lvcreate -n opt -L 10G rootvg && sudo mkfs.xfs /dev/rootvg/opt
+              sleep 1
+              sudo lvcreate -n local -L 3G rootvg && sudo mkfs.xfs /dev/rootvg/local
+              sleep 2
+
+              echo "/dev/mapper/rootvg-opt /opt xfs defaults 0 0" | sudo tee -a /etc/fstab
+              echo "/dev/mapper/rootvg-tmp /tmp xfs defaults 0 0" | sudo tee -a /etc/fstab
+              echo "/dev/mapper/rootvg-local /usr/local xfs defaults 0 0" | sudo tee -a /etc/fstab
+              echo "/dev/mapper/rootvg-home /home xfs defaults 0 0" | sudo tee -a /etc/fstab
+              echo "/dev/mapper/rootvg-var /var xfs defaults 0 0" | sudo tee -a /etc/fstab
+              echo "/dev/mapper/rootvg-log /var/log xfs defaults 0 0" | sudo tee -a /etc/fstab
+              echo "/dev/mapper/rootvg-audit /var/log/audit xfs defaults 0 0" | sudo tee -a /etc/fstab
+              sleep 2
+
+              sudo mount /dev/mapper/rootvg-home /mnt
+              sleep 1
+              sudo cp -Rp /home/* /mnt || true
+              sleep 1
+              sudo umount /mnt
+              sleep 1
+
+              sudo mount /dev/mapper/rootvg-tmp /mnt
+              sleep 1
+              sudo cp -Rp /tmp/* /mnt || true
+              sleep 1
+              sudo umount /mnt
+              sleep 1
+
+              sudo mount /dev/mapper/rootvg-local /mnt
+              sleep 1
+              sudo cp -Rp /usr/local/* /mnt || true
+              sleep 1
+              sudo umount /mnt
+              sleep 1
+
+              sudo mkdir -p /mnt/var /mnt/var/log /mnt/var/log/audit
+              sleep 1
+              sudo mount /dev/mapper/rootvg-var /mnt/var
+              sleep 1
+              sudo mount /dev/mapper/rootvg-log /mnt/var/log
+              sleep 1
+              sudo mount /dev/mapper/rootvg-audit /mnt/var/log/audit
+              sleep 1
+              sudo cp -Rp /var/* /mnt/var || true
+              sleep 1
+
+              sudo umount /mnt/var/log/audit
+              sleep 1
+              sudo umount /mnt/var/log
+              sleep 1
+              sudo umount /mnt/var
+              sleep 1
+
+              sudo mount -a
+              sleep 2
+              sudo systemctl daemon-reexec
