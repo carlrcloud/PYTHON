@@ -7,6 +7,9 @@ sudo yum install -y lvm2 || sudo apt-get install -y lvm2
 # Step 1: Create Physical Volume and Volume Group
 sudo pvcreate /dev/sdb
 sudo vgcreate rootvg /dev/sdb
+DEVICE=$(lsblk -b -o NAME,SIZE -dn | awk '$2 == 500107862016 { print "/dev/" $1 }')
+sudo pvcreate $DEVICE
+sudo vgcreate rootvg $DEVICE
 
 # Step 2: Create Logical Volumes
 sudo lvcreate -n opt   -L 5G  rootvg
