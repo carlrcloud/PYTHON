@@ -1,0 +1,82 @@
+name: ConfigureStorageVolume
+description: Set up LVM volumes, format with XFS, update fstab safely, and copy initial data
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: SetupLVMAndMountPoints
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euxo pipefail
+
+              # Function to safely add to fstab without duplicates
+              add_fstab_entry() {
+                local device="$1"
+                local mount_point="$2"
+                local fs_type="${3:-xfs}"
+                local options="${4:-defaults}"
+                local dump="${5:-0}"
+                local pass="${6:-0}"
+
+                local entry="$device $mount_point $fs_type $options $dump $pass"
+
+                if ! grep -Fxq "$entry" /etc/fstab; then
+                  echo "$entry" | sudo tee -a /etc/fstab
+                else
+                  echo "Skipping duplicate fstab entry: $entry"
+                fi
+              }
+
+              # Get available device
+              pvname=$(ls /sys/block | tail -1)
+              sudo pvcreate /dev/$pvname
+              sudo vgcreate rootvg /dev/$pvname
+
+              # Create logical volumes
+              sudo lvcreate -n tmp -L 5G rootvg && sudo mkfs.xfs /dev/rootvg/tmp
+              sudo lvcreate -n var -L 5G rootvg && sudo mkfs.xfs /dev/rootvg/var
+              sudo lvcreate -n log -L 10G rootvg && sudo mkfs.xfs /dev/rootvg/log
+              sudo lvcreate -n audit -L 1G rootvg && sudo mkfs.xfs /dev/rootvg/audit
+              sudo lvcreate -n home -L 5G rootvg && sudo mkfs.xfs /dev/rootvg/home
+              sudo lvcreate -n opt -L 10G rootvg && sudo mkfs.xfs /dev/rootvg/opt
+              sudo lvcreate -n local -L 3G rootvg && sudo mkfs.xfs /dev/rootvg/local
+
+              # Ensure all mount points exist
+              sudo mkdir -p /opt /tmp /usr/local /home /var /var/log /var/log/audit
+
+              # Add fstab entries
+              add_fstab_entry /dev/mapper/rootvg-opt /opt
+              add_fstab_entry /dev/mapper/rootvg-tmp /tmp
+              add_fstab_entry /dev/mapper/rootvg-local /usr/local
+              add_fstab_entry /dev/mapper/rootvg-home /home
+              add_fstab_entry /dev/mapper/rootvg-var /var
+              add_fstab_entry /dev/mapper/rootvg-log /var/log
+              add_fstab_entry /dev/mapper/rootvg-audit /var/log/audit
+
+              # Migrate existing data (if any)
+              sudo mount /dev/mapper/rootvg-home /mnt
+              sudo cp -Rp /home/* /mnt || true
+              sudo umount /mnt
+
+              sudo mount /dev/mapper/rootvg-tmp /mnt
+              sudo cp -Rp /tmp/* /mnt || true
+              sudo umount /mnt
+
+              sudo mount /dev/mapper/rootvg-local /mnt
+              sudo cp -Rp /usr/local/* /mnt || true
+              sudo umount /mnt
+
+              sudo mount /dev/mapper/rootvg-var /mnt
+              sudo mkdir -p /mnt/log /mnt/log/audit
+              sudo mount /dev/mapper/rootvg-log /mnt/log
+              sudo mount /dev/mapper/rootvg-audit /mnt/log/audit
+              sudo cp -Rp /var/* /mnt || true
+              sudo umount /mnt/log/audit || true
+              sudo umount /mnt/log || true
+              sudo umount /mnt || true
+
+              # Final system mount and daemon reload
+              sudo mount -a
+              sudo systemctl daemon-reexec
