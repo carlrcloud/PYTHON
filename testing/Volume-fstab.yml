@@ -30,6 +30,8 @@ phases:
               }
 
               # Get available device
+              # Identify unpartitioned and unmounted EBS volumes (excluding the root volume)
+pvname=$(lsblk -dpno NAME,TYPE | grep disk | grep -v "$(findmnt -n -o SOURCE /)" | awk '{print $1}' | head -1)
               pvname=$(ls /sys/block | tail -1)
               sudo pvcreate /dev/$pvname
               sudo vgcreate rootvg /dev/$pvname
