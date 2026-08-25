@@ -1,0 +1,49 @@
+import boto3
+import sys
+
+STACK_ARN = sys.argv[1]
+
+TAG_KEY = "AWS_Solutions"
+TAG_VALUE = "CustomStack"
+
+region = STACK_ARN.split(":")[3]
+
+tagging = boto3.client(
+    "resourcegroupstaggingapi",
+    region_name=region
+)
+
+paginator = tagging.get_paginator("get_resources")
+
+for page in paginator.paginate(
+    TagFilters=[
+        {
+            "Key": "aws:cloudformation:stack-id",
+            "Values": [STACK_ARN]
+        }
+    ]
+):
+    for resource in page["ResourceTagMappingList"]:
+
+        arn = resource["ResourceARN"]
+        tags = {
+            tag["Key"]: tag["Value"]
+            for tag in resource.get("Tags", [])
+        }
+
+        # Don't overwrite existing AWS_Solutions tag
+        if TAG_KEY in tags:
+            print(f"SKIP   : {arn}")
+            continue
+
+        response = tagging.tag_resources(
+            ResourceARNList=[arn],
+            Tags={
+                TAG_KEY: TAG_VALUE
+            }
+        )
+
+        if response["FailedResourcesMap"]:
+            print(f"FAILED : {arn}")
+        else:
+            print(f"TAGGED : {arn}")
