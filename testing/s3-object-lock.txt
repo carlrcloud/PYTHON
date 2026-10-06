@@ -1,0 +1,57 @@
+# Using Amazon S3 Object Lock for Ransomware Protection
+
+## Purpose
+
+Amazon S3 Object Lock can be used as an additional security control to protect critical data against ransomware, accidental deletion, and malicious modification. Object Lock provides **Write Once, Read Many (WORM)** protection by preventing protected object versions from being deleted or overwritten during a defined retention period.
+
+The objective is to ensure that, even if an AWS account, application, or administrative credential is compromised, protected versions of critical S3 objects remain available for recovery.
+
+## How Object Lock Protects Against Ransomware
+
+Ransomware or a compromised workload may attempt to encrypt, overwrite, or delete objects stored in S3.
+
+S3 Object Lock works together with **S3 Versioning**. When an application modifies an existing object, Amazon S3 creates a new version rather than replacing the protected version. Object Lock can prevent the previous version from being permanently deleted before its retention period expires.
+
+This provides a trusted recovery point from which the original data can be restored after a ransomware event.
+
+A simplified flow is:
+
+**Original Object → Versioning → Object Lock Retention → Protected Recovery Copy**
+
+If a compromised application uploads an encrypted version of an object, the protected previous version remains retained and can be recovered.
+
+## Object Lock Retention Modes
+
+Amazon S3 provides two Object Lock retention modes:
+
+**Governance Mode** provides protection against normal deletion or modification while allowing specifically authorized identities with the appropriate bypass permission to override the retention settings. This provides operational flexibility but offers less protection against a highly privileged account compromise.
+
+**Compliance Mode** provides stronger protection. A protected object version cannot be deleted or have its retention period shortened, including by the AWS account root user, until the retention period expires.
+
+For buckets containing critical recovery data, **Compliance Mode should be considered where strict immutability is required and operational requirements permit it**. Governance Mode may be appropriate where administrative override capabilities are required.
+
+## Recommended Implementation
+
+For S3 buckets identified as requiring ransomware protection:
+
+1. Enable **S3 Versioning and Object Lock**.
+2. Define an appropriate default retention period based on business and recovery requirements.
+3. Select Governance or Compliance mode according to the required level of protection.
+4. Apply least-privilege IAM and bucket policies to restrict changes to Object Lock configuration and retention settings.
+5. Protect administrative access using MFA and controlled privileged roles.
+6. Enable AWS CloudTrail and appropriate monitoring for changes to bucket and Object Lock configurations.
+7. Periodically test the recovery of protected object versions.
+
+For particularly sensitive workloads, immutable copies can also be maintained in a **separate AWS account** using S3 replication. This reduces the risk that compromise of the workload account also compromises the recovery copies.
+
+## Important Considerations
+
+Object Lock should be implemented as part of a broader ransomware protection and recovery strategy rather than as the only security control.
+
+Retention periods require careful planning because protected objects—particularly those using Compliance Mode—cannot simply be deleted when they are no longer needed. This can affect storage costs, lifecycle management, and operational procedures.
+
+The organization should therefore establish retention periods based on data criticality, recovery requirements, regulatory requirements, and expected storage costs.
+
+## Conclusion
+
+Amazon S3 Object Lock provides an effective immutable-storage control for protecting critical S3 data against ransomware and unauthorized deletion. Combined with S3 Versioning, least-privilege access, monitoring, and preferably cross-account data protection, it can ensure that trusted versions of critical data remain available for recovery following a security incident.
