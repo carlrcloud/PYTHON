@@ -1,0 +1,244 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AMI validation test phase for the EC2 Image Builder pipeline.
+  Test component (runs a validation script from S3 and saves results),
+  results bucket, and IAM additions for the Image Builder instance role.
+  Lambda 1's S3 read access is added in its own stack.
+
+Parameters:
+  ScriptS3Uri:
+    Type: String
+    Description: Full S3 URI of the validation script, e.g. s3://my-bucket/scripts/validate.sh
+    AllowedPattern: '^s3://[a-z0-9.\-]+/.+$'
+  ScriptBucketName:
+    Type: String
+    Description: Name of the bucket that holds the validation script (used for IAM)
+  ScriptObjectKey:
+    Type: String
+    Description: Key of the validation script inside ScriptBucketName, e.g. scripts/validate.sh
+  ResultsPrefix:
+    Type: String
+    Default: ami-validation
+    Description: Prefix under which results are written (no leading or trailing slash)
+  ComponentVersion:
+    Type: String
+    Default: 1.1.0
+    Description: Semantic version of the test component. Bump it on every change (components are immutable).
+  ImageBuilderInstanceRoleName:
+    Type: String
+    Description: Name (not ARN) of the IAM role in the Image Builder infrastructure configuration's instance profile
+
+Resources:
+
+  # ---------------------------------------------------------------
+  # Results bucket: validation.log and summary.txt per AMI
+  # ---------------------------------------------------------------
+  ValidationResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireValidationResults
+            Status: Enabled
+            Prefix: !Sub '${ResultsPrefix}/'
+            ExpirationInDays: 180
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  ValidationResultsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ValidationResultsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ValidationResultsBucket.Arn
+              - !Sub '${ValidationResultsBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # ---------------------------------------------------------------
+  # Test component
+  #   - Downloads the script from S3
+  #   - Runs it, captures all output
+  #   - Uploads validation.log and summary.txt to
+  #       s3://<results-bucket>/<prefix>/<ami-id>/
+  #     summary.txt carries object metadata status=PASSED|FAILED
+  #   - Always exits 0: a failed check does NOT fail the pipeline.
+  #     The image becomes AVAILABLE and the report goes to the
+  #     approver, who decides. (A missing script in S3 still fails
+  #     the S3Download step, which goes to the investigate path.)
+  # ---------------------------------------------------------------
+  AmiValidationComponent:
+    Type: AWS::ImageBuilder::Component
+    Properties:
+      Name: ami-config-validation
+      Version: !Ref ComponentVersion
+      Platform: Linux
+      Description: Runs the AMI configuration validation script and stores the results in S3
+      ChangeDescription: !Sub 'Version ${ComponentVersion}'
+      Data: |
+        name: ami-config-validation
+        description: Validate that all configurations were applied to the AMI
+        schemaVersion: 1.0
+        parameters:
+          - ScriptS3Uri:
+              type: string
+              description: S3 URI of the validation script
+          - ResultsBucket:
+              type: string
+              description: Bucket for validation results
+          - ResultsPrefix:
+              type: string
+              default: ami-validation
+              description: Key prefix for validation results
+          - AwsRegion:
+              type: string
+              default: us-east-1
+              description: Region of the pipeline (fallback if it cannot be detected)
+        phases:
+          - name: test
+            steps:
+              - name: DownloadValidationScript
+                action: S3Download
+                maxAttempts: 3
+                inputs:
+                  - source: '{{ ScriptS3Uri }}'
+                    destination: /tmp/ami-validation/validate.sh
+                    overwrite: true
+
+              - name: RunValidation
+                action: ExecuteBash
+                inputs:
+                  commands:
+                    - |
+                      set -u
+                      WORKDIR=/tmp/ami-validation
+                      LOG="$WORKDIR/validation.log"
+                      SUMMARY="$WORKDIR/summary.txt"
+
+                      # The test instance is launched from the new AMI,
+                      # so its own image ID is the AMI being validated.
+                      # 1) Instance metadata, bypassing any HTTP proxy
+                      # 2) Fallback: AWS CLI lookup of this instance by private IP
+                      AMI_ID=""
+                      REGION="$(aws configure get region 2>/dev/null || true)"
+                      TOKEN=$(curl -sf --noproxy '*' --max-time 3 -X PUT \
+                        "http://169.254.169.254/latest/api/token" \
+                        -H "X-aws-ec2-metadata-token-ttl-seconds: 300" || true)
+                      if [ -n "$TOKEN" ]; then
+                        AMI_ID=$(curl -sf --noproxy '*' --max-time 3 \
+                          -H "X-aws-ec2-metadata-token: $TOKEN" \
+                          http://169.254.169.254/latest/meta-data/ami-id || true)
+                        [ -z "$REGION" ] && REGION=$(curl -sf --noproxy '*' --max-time 3 \
+                          -H "X-aws-ec2-metadata-token: $TOKEN" \
+                          http://169.254.169.254/latest/meta-data/placement/region || true)
+                      fi
+                      REGION="${REGION:-{{ AwsRegion }}}"
+
+                      if [ -z "$AMI_ID" ]; then
+                        echo "Metadata not reachable, looking up AMI ID with the AWS CLI"
+                        for IP in $(hostname -I); do
+                          AMI_ID=$(aws ec2 describe-instances --region "$REGION" \
+                            --filters "Name=private-ip-address,Values=$IP" \
+                                      "Name=instance-state-name,Values=running" \
+                            --query 'Reservations[0].Instances[0].ImageId' \
+                            --output text 2>/dev/null || true)
+                          if [ -n "$AMI_ID" ] && [ "$AMI_ID" != "None" ]; then break; fi
+                          AMI_ID=""
+                        done
+                      fi
+                      AMI_ID="${AMI_ID:-unknown-ami}"
+                      echo "AMI under test: $AMI_ID (region $REGION)"
+
+                      chmod +x "$WORKDIR/validate.sh"
+
+                      bash "$WORKDIR/validate.sh" > "$LOG" 2>&1
+                      RC=$?
+
+                      if [ "$RC" -eq 0 ]; then STATUS=PASSED; else STATUS=FAILED; fi
+
+                      {
+                        echo "AMI: $AMI_ID"
+                        echo "Validation status: $STATUS (exit code $RC)"
+                        echo "Run at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                        echo "----- last lines of output -----"
+                        tail -c 3000 "$LOG"
+                      } > "$SUMMARY"
+
+                      DEST="s3://{{ ResultsBucket }}/{{ ResultsPrefix }}/$AMI_ID"
+                      # Upload failures are logged but never fail the pipeline;
+                      # the approval message will then show "report not found".
+                      aws s3 cp "$LOG" "$DEST/validation.log" --region "$REGION" \
+                        --metadata "status=$STATUS,exit-code=$RC" \
+                        || echo "WARNING: could not upload validation.log"
+                      aws s3 cp "$SUMMARY" "$DEST/summary.txt" --region "$REGION" \
+                        --metadata "status=$STATUS,exit-code=$RC" \
+                        || echo "WARNING: could not upload summary.txt"
+
+                      # Also echo into the Image Builder logs
+                      cat "$LOG"
+                      echo "Validation $STATUS for $AMI_ID (exit code $RC)"
+                      exit 0
+
+  # ---------------------------------------------------------------
+  # IAM additions on existing roles
+  # ---------------------------------------------------------------
+  ImageBuilderInstanceValidationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ami-validation-test-access
+      Roles:
+        - !Ref ImageBuilderInstanceRoleName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ReadValidationScript
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${ScriptBucketName}/${ScriptObjectKey}'
+          - Sid: WriteValidationResults
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub '${ValidationResultsBucket.Arn}/${ResultsPrefix}/*'
+          - Sid: LookupOwnAmiId
+            Effect: Allow
+            Action: ec2:DescribeInstances
+            Resource: '*'
+
+
+Outputs:
+  ValidationComponentArn:
+    Description: Add this to the image recipe's Components list
+    Value: !GetAtt AmiValidationComponent.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ValidationComponentArn'
+  ValidationResultsBucketName:
+    Description: Pass to Lambda 1's stack (ValidationResultsBucketName) and the recipe component (ResultsBucket)
+    Value: !Ref ValidationResultsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ValidationResultsBucket'
+  ResultsPrefix:
+    Value: !Ref ResultsPrefix
+    Export:
+      Name: !Sub '${AWS::StackName}-ResultsPrefix'
