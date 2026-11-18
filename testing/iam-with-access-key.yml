@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an IAM user for programmatic (CLI) access only, generates an access
+  key pair, and stores the credentials in AWS Secrets Manager.
+
+Parameters:
+  UserName:
+    Type: String
+    Description: Name of the IAM user to create
+    AllowedPattern: '[\w+=,.@-]{1,64}'
+    ConstraintDescription: 1-64 characters, alphanumeric or +=,.@-_
+
+  ManagedPolicyArns:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: >
+      Optional comma-separated list of managed policy ARNs to attach
+      (e.g. arn:aws:iam::aws:policy/ReadOnlyAccess). Leave blank for none.
+
+  KmsKeyId:
+    Type: String
+    Default: ''
+    Description: >
+      Optional KMS key ARN/ID to encrypt the secret. Leave blank to use
+      the AWS-managed aws/secretsmanager key.
+
+Conditions:
+  HasPolicies: !Not [!Equals [!Join ['', !Ref ManagedPolicyArns], '']]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyId, '']]
+
+Resources:
+  IamUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref UserName
+      ManagedPolicyArns: !If [HasPolicies, !Ref ManagedPolicyArns, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: CreatedBy
+          Value: !Ref AWS::StackName
+
+  IamAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref IamUser
+      Status: Active
+      Serial: 1   # increment this value and update the stack to rotate the key
+
+  AccessKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'iam-user/${UserName}/access-key'
+      Description: !Sub 'CLI access key credentials for IAM user ${UserName}'
+      KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref 'AWS::NoValue']
+      SecretString: !Sub |
+        {
+          "UserName": "${IamUser}",
+          "AccessKeyId": "${IamAccessKey}",
+          "SecretAccessKey": "${IamAccessKey.SecretAccessKey}"
+        }
+
+Outputs:
+  UserName:
+    Value: !Ref IamUser
+  UserArn:
+    Value: !GetAtt IamUser.Arn
+  AccessKeyId:
+    Value: !Ref IamAccessKey
+  AccessKeySecretArn:
+    Description: Secrets Manager ARN holding the access key ID and secret access key
+    Value: !Ref AccessKeySecret
